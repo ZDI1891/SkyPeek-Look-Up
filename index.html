@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#080e19">
+<title>Sky Peek — Look up, What's Above.</title>
+
+<link rel="stylesheet"
+ href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+<style>
+:root {
+  --bg:#080e19;
+  --panel:#111b2b;
+  --line:#26364b;
+  --text:#f1f5fb;
+  --muted:#91a3ba;
+  --cyan:#61d8f5;
+  --green:#a6efbd;
+  --amber:#ffca75;
+}
+* {box-sizing:border-box}
+body {
+  margin:0;background:var(--bg);color:var(--text);
+  font:15px/1.5 system-ui,-apple-system,sans-serif;
+}
+main {max-width:760px;margin:auto;padding:20px 15px 35px}
+header {
+  display:flex;align-items:center;justify-content:space-between;
+  gap:12px;margin-bottom:20px
+}
+h1 {margin:0;font-size:30px;letter-spacing:-1px}
+h1 span {color:var(--cyan)}
+.tagline {margin:0;color:var(--muted);font-size:14px}
+button {
+  border:1px solid var(--line);background:var(--panel);
+  color:var(--text);padding:11px 14px;border-radius:12px;
+  font:inherit;cursor:pointer
+}
+button.active {background:#164054;border-color:var(--cyan)}
+button:focus-visible {outline:2px solid var(--cyan)}
+.location {
+  display:flex;justify-content:space-between;align-items:center;
+  gap:10px;margin:18px 0;color:var(--muted)
+}
+.location strong {color:var(--text)}
+.card {
+  background:var(--panel);border:1px solid var(--line);
+  border-radius:18px;padding:17px;margin:14px 0
+}
+.eyebrow {
+  color:var(--cyan);font-size:12px;letter-spacing:1.5px;
+  text-transform:uppercase
+}
+h2 {font-size:20px;line-height:1.3;margin:4px 0 8px}
+p {margin:6px 0}
+.muted {color:var(--muted);font-size:14px}
+.tabs {display:grid;grid-template-columns:1fr 1fr;gap:9px}
+#map {height:330px;border-radius:13px;background:#0b1523;z-index:1}
+.view {margin-top:14px}
+.hidden {display:none!important}
+.sky {
+  height:310px;position:relative;overflow:hidden;
+  border:1px solid #29465d;border-radius:50% 50% 15px 15px;
+  background:radial-gradient(ellipse at 50% 100%,#1b3c50,#0b1728 72%);
+}
+.sky:before {
+  content:"";position:absolute;left:8%;right:8%;bottom:0;
+  height:60%;border:1px solid #35546a;border-bottom:0;
+  border-radius:100% 100% 0 0;
+}
+.horizon {
+  position:absolute;left:0;right:0;bottom:38px;
+  border-top:1px solid #52758a;text-align:center;
+  color:var(--muted);font-size:11px;padding-top:5px
+}
+.direction {
+  position:absolute;color:var(--muted);font-size:12px
+}
+.north {top:12px;left:50%;transform:translateX(-50%)}
+.east {right:13px;top:50%}
+.west {left:13px;top:50%}
+.south {bottom:12px;left:50%;transform:translateX(-50%)}
+.skycenter {
+  position:absolute;top:43%;left:50%;transform:translate(-50%,-50%);
+  text-align:center;width:80%
+}
+.skycenter .big {font-size:36px}
+.skycenter p {font-size:13px;color:var(--muted)}
+.summary {
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px;margin-top:14px
+}
+.stat {
+  border:1px solid var(--line);border-radius:13px;padding:11px 8px;
+  min-width:0
+}
+.stat strong {display:block;font-size:19px}
+.stat span {display:block;color:var(--muted);font-size:12px}
+.event {
+  display:flex;gap:12px;align-items:flex-start;
+  padding:12px 0;border-bottom:1px solid var(--line)
+}
+.event:last-child {border:0;padding-bottom:0}
+.icon {font-size:23px}
+.event strong {display:block}
+.badge {
+  display:inline-block;padding:3px 8px;border-radius:20px;
+  font-size:11px;background:#25364b;color:var(--muted);margin-top:5px
+}
+footer {text-align:center;color:var(--muted);font-size:12px;padding:15px 0}
+.leaflet-container {background:#101b2a}
+@media(max-width:420px) {
+  main {padding:15px 11px 30px}
+  h1 {font-size:27px}
+  #map {height:300px}
+  .sky {height:280px}
+}
+</style>
+</head>
+
+<body>
+<main>
+<header>
+  <div>
+    <h1>Sky<span>Peek</span></h1>
+    <p class="tagline">Look up, What's Above.</p>
+  </div>
+  <button id="locationBtn">◎ My location</button>
+</header>
+
+<div class="location">
+  <div>
+    <div class="eyebrow">YOUR SKY</div>
+    <strong id="place">Trivandrum, India</strong>
+  </div>
+  <span id="dayMode" class="badge">Loading local time…</span>
+</div>
+
+<section class="card">
+  <div class="eyebrow">YOUR PERSONAL OBSERVATORY</div>
+  <h2 id="greeting">Explore the sky above you.</h2>
+  <p class="muted" id="intro">
+    Aircraft, satellites and the objects passing overhead.
+  </p>
+
+  <div class="summary">
+    <div class="stat">
+      <strong>✈</strong>
+      <span>Aircraft</span>
+      <span id="aircraftStatus">Connecting next</span>
+    </div>
+    <div class="stat">
+      <strong>◉</strong>
+      <span>ISS</span>
+      <span id="issStatus">Awaiting data</span>
+    </div>
+    <div class="stat">
+      <strong>✦</strong>
+      <span>Starlink</span>
+      <span id="starlinkStatus">Awaiting data</span>
+    </div>
+  </div>
+</section>
+
+<div class="tabs">
+  <button id="mapTab" class="active">⌖ Live Map</button>
+  <button id="skyTab">✦ Sky View</button>
+</div>
+
+<section id="mapView" class="card view">
+  <h2>Explore your surroundings</h2>
+  <p class="muted">
+    Your location is shown on the map. Live aircraft tracking
+    will be connected in the next stage.
+  </p>
+  <div id="map"></div>
+  <p class="muted" id="mapMessage">Map ready.</p>
+</section>
+
+<section id="skyView" class="card view hidden">
+  <h2>Your sky dome</h2>
+  <p class="muted">
+    A compass-style view for locating objects above the horizon.
+  </p>
+  <div class="sky">
+    <span class="direction north">N</span>
+    <span class="direction east">E</span>
+    <span class="direction west">W</span>
+    <span class="direction south">S</span>
+    <div class="skycenter">
+      <div class="big">✦</div>
+      <strong>Sky View</strong>
+      <p>Waiting for satellite positions</p>
+    </div>
+    <div class="horizon">HORIZON</div>
+  </div>
+  <p class="muted">
+    Satellite positions will appear here once orbital tracking
+    is connected.
+  </p>
+</section>
+
+<section class="card">
+  <div class="eyebrow">COMING UP</div>
+  <h2>What's next in your sky?</h2>
+  <div class="event">
+    <div class="icon">✈️</div>
+    <div>
+      <strong>Aircraft overhead</strong>
+      <p class="muted">Live aircraft data not connected yet.</p>
+      <span class="badge">IN DEVELOPMENT</span>
+    </div>
+  </div>
+  <div class="event">
+    <div class="icon">🛰️</div>
+    <div>
+      <strong>International Space Station</strong>
+      <p class="muted">Upcoming passes will appear here.</p>
+      <span class="badge">IN DEVELOPMENT</span>
+    </div>
+  </div>
+  <div class="event">
+    <div class="icon">✦</div>
+    <div>
+      <strong>Starlink satellites</strong>
+      <p class="muted">Visibility predictions will appear here.</p>
+      <span class="badge">IN DEVELOPMENT</span>
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Location & privacy</h2>
+  <p class="muted">
+    Your browser location helps centre the map and calculate
+    local viewing times. Location is not sent to a Sky Peek
+    server by this page.
+  </p>
+  <button id="locationBtn2">Use my current location</button>
+</section>
+
+<footer>
+  Sky Peek · Look up, What's Above.<br>
+  Live tracking and alerts are not connected yet.
+</footer>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+let lat = 8.498;
+let lon = 76.944;
+let map;
+let marker;
+
+function updateDayNight() {
+  const hour = new Date().getHours();
+  const night = hour < 6 || hour >= 18;
+  document.getElementById("dayMode").textContent =
+    night ? "Night mode" : "Day mode";
+  document.getElementById("greeting").textContent =
+    night ? "What's above you tonight?" : "What's flying above you?";
+  document.getElementById("intro").textContent =
+    night
+      ? "Explore aircraft and discover satellites that may be visible."
+      : "Explore nearby aircraft and prepare for tonight's sky.";
+}
+
+function updateMap() {
+  if (!map) {
+    map = L.map("map").setView([lat, lon], 9);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19
+    }).addTo(map);
+    marker = L.marker([lat, lon]).addTo(map)
+      .bindPopup("Your selected location");
+  } else {
+    map.setView([lat, lon], 9);
+    marker.setLatLng([lat, lon]);
+  }
+  document.getElementById("mapMessage").textContent =
+    `Map centred at ${lat.toFixed(3)}, ${lon.toFixed(3)}.`;
+}
+
+function useLocation() {
+  if (!navigator.geolocation) {
+    alert("Location is not supported by this browser.");
+    return;
+  }
+
+  document.getElementById("place").textContent = "Finding your location…";
+
+  navigator.geolocation.getCurrentPosition(
+    position => {
+      lat = position.coords.latitude;
+      lon = position.coords.longitude;
+      document.getElementById("place").textContent =
+        `Your location (${lat.toFixed(3)}, ${lon.toFixed(3)})`;
+      updateMap();
+    },
+    () => {
+      document.getElementById("place").textContent =
+        "Trivandrum, India";
+      alert("Location permission was denied or unavailable. Using the default location.");
+    },
+    {enableHighAccuracy:false, timeout:12000, maximumAge:300000}
+  );
+}
+
+document.getElementById("mapTab").onclick = () => {
+  document.getElementById("mapView").classList.remove("hidden");
+  document.getElementById("skyView").classList.add("hidden");
+  document.getElementById("mapTab").classList.add("active");
+  document.getElementById("skyTab").classList.remove("active");
+  setTimeout(() => map && map.invalidateSize(), 100);
+};
+
+document.getElementById("skyTab").onclick = () => {
+  document.getElementById("skyView").classList.remove("hidden");
+  document.getElementById("mapView").classList.add("hidden");
+  document.getElementById("skyTab").classList.add("active");
+  document.getElementById("mapTab").classList.remove("active");
+};
+
+document.getElementById("locationBtn").onclick = useLocation;
+document.getElementById("locationBtn2").onclick = useLocation;
+
+updateDayNight();
+updateMap();
+</script>
+</body>
+</html>
