@@ -328,6 +328,80 @@ document.getElementById("locationBtn").onclick = useLocation;
 document.getElementById("locationBtn2").onclick = useLocation;
 
 updateDayNight();
+let aircraftLayer = null;
+let aircraftRefreshTimer = null;
+
+async function updateAircraft() {
+  const status = document.getElementById("aircraftStatus");
+
+  try {
+    status.textContent = "Loading aircraft…";
+
+    const url =
+      `https://opendata.adsb.fi/api/v3/lat/${lat}/lon/${lon}/dist/50`;
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error("Aircraft data unavailable");
+    }
+
+    const data = await response.json();
+    const aircraft = data.ac || [];
+
+    if (aircraftLayer) {
+      map.removeLayer(aircraftLayer);
+    }
+
+    aircraftLayer = L.layerGroup().addTo(map);
+
+    aircraft.forEach(plane => {
+      if (typeof plane.lat !== "number" ||
+          typeof plane.lon !== "number") return;
+
+      const marker = L.circleMarker(
+        [plane.lat, plane.lon],
+        {
+          radius: 6,
+          color: "#54d6ff",
+          fillColor: "#54d6ff",
+          fillOpacity: 0.9,
+          weight: 2
+        }
+      );
+
+      const callsign = (plane.flight || plane.r || "Unknown aircraft").trim();
+      const altitude = plane.alt_baro ?? "Unknown";
+      const speed = plane.gs ?? "Unknown";
+      const heading = plane.track ?? "Unknown";
+
+      marker.bindPopup(
+        `<b>${callsign}</b><br>` +
+        `Altitude: ${altitude} ft<br>` +
+        `Speed: ${speed} knots<br>` +
+        `Heading: ${heading}°`
+      );
+
+      marker.addTo(aircraftLayer);
+    });
+
+    status.textContent = `${aircraft.length} aircraft found`;
+
+  } catch (error) {
+    status.textContent = "Aircraft data temporarily unavailable";
+    console.error("Sky Peek aircraft error:", error);
+  }
+}
+
+function startAircraftTracking() {
+  updateAircraft();
+
+  if (aircraftRefreshTimer) {
+    clearInterval(aircraftRefreshTimer);
+  }
+
+  aircraftRefreshTimer = setInterval(updateAircraft, 60000);
+}
 updateMap();
 </script>
 </body>
